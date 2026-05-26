@@ -5,6 +5,7 @@ from database import init_db
 from routers import movies_router, sessions_router, tickets_router, users_router
 from session_manager import scheduler
 from config import settings
+from rate_limiter import RateLimitMiddleware
 
 
 @asynccontextmanager
@@ -28,6 +29,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
