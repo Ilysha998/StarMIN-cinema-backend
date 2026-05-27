@@ -31,3 +31,5 @@ tmp/
 
 .env
 .env.local
+database/cinema.db-wal
+database/cinema.db-shm
