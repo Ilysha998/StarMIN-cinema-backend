@@ -1,12 +1,18 @@
+import secrets
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Ticket, Session as SessionModel, User
 from schemas import TicketCreate, TicketResponse, TicketUpdate
 from config import HALL_CONFIG
-from auth import get_current_user, get_current_admin_user
+from auth import get_current_user, get_current_admin_user, get_optional_current_user
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
+
+
+def _generate_qr_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 @router.get("/my", response_model=list[TicketResponse])
@@ -45,7 +51,6 @@ def get_tickets_by_session(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    _current: User = Depends(get_current_user),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
@@ -65,7 +70,6 @@ def get_tickets_by_session(
 def get_available_seats(
     session_id: int,
     db: Session = Depends(get_db),
-    _current: User = Depends(get_current_user),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
@@ -119,7 +123,7 @@ def get_sales_statistics(
 def buy_ticket(
     ticket: TicketCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     session = db.query(SessionModel).filter(
         SessionModel.id == ticket.session_id
@@ -152,9 +156,12 @@ def buy_ticket(
 
     db_ticket = Ticket(
         session_id=ticket.session_id,
-        user_id=current_user.id,
+        user_id=current_user.id if current_user else None,
         seat_number=ticket.seat_number,
-        is_paid=False
+        is_paid=False,
+        phone=ticket.phone,
+        email=ticket.email,
+        qr_token=_generate_qr_token(),
     )
 
     db.add(db_ticket)

@@ -72,20 +72,27 @@ class TicketBase(BaseModel):
     session_id: int = Field(..., gt=0, description="ID сеанса")
     seat_number: int = Field(..., gt=0, description="Номер места")
     is_paid: bool = Field(False, description="Оплачен ли билет")
-    user_id: int = Field(..., gt=0, description="ID пользователя")
+    user_id: Optional[int] = Field(None, description="ID пользователя (если авторизован)")
 
 
 class TicketCreate(BaseModel):
     session_id: int = Field(..., gt=0)
     seat_number: int = Field(..., gt=0)
+    phone: Optional[str] = Field(None, max_length=20, description="Телефон для связи")
+    email: Optional[str] = Field(None, max_length=255, description="Email для связи")
 
 
 class TicketUpdate(BaseModel):
     is_paid: Optional[bool] = None
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
 
 
 class TicketResponse(TicketBase):
     id: int
+    qr_token: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -95,6 +102,7 @@ class TicketBrief(BaseModel):
     session_id: int
     seat_number: int
     is_paid: bool
+    qr_token: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -110,6 +118,8 @@ class SessionWithTickets(SessionResponse):
 class UserBase(BaseModel):
     login: str = Field(..., min_length=3, max_length=100, description="Логин пользователя")
     is_admin: bool = Field(False, description="Администратор ли")
+    phone: Optional[str] = Field(None, max_length=20, description="Телефон")
+    email: Optional[str] = Field(None, max_length=255, description="Email")
 
 
 class UserCreate(UserBase):
@@ -119,6 +129,8 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=6, max_length=255)
     is_admin: Optional[bool] = None
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
 
 
 class UserResponse(UserBase):
