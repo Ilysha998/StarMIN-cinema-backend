@@ -51,6 +51,10 @@ class Settings(BaseSettings):
 
     CLEANUP_HOURS_AGO: int = 2
 
+    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_REGISTER_PER_MINUTE: int = 3
+    RATE_LIMIT_LOGIN_PER_MINUTE: int = 10
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
