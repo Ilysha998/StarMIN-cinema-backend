@@ -86,6 +86,7 @@ class TicketUpdate(BaseModel):
     is_paid: Optional[bool] = None
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[str] = Field(None, max_length=255)
+    qr_token: Optional[str] = Field(None, description="QR-токен для анонимной оплаты")
 
 
 class TicketResponse(TicketBase):
