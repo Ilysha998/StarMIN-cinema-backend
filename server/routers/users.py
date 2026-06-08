@@ -59,20 +59,23 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 @router.get("/me/tickets")
 def get_my_tickets(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from models import Ticket, Session as SessionModel, Movie
+    from models import Ticket, Session as SessionModel, Movie, Hall
     tickets = db.query(Ticket).filter(Ticket.user_id == current_user.id).all()
     result = []
     for t in tickets:
         session = db.query(SessionModel).filter(SessionModel.id == t.session_id).first()
         movie = db.query(Movie).filter(Movie.id == session.movie_id).first() if session else None
+        hall = db.query(Hall).filter(Hall.id == session.hall_id).first() if session else None
         result.append({
             "id": t.id,
-            "seat_number": t.seat_number,
+            "seat_row": t.seat_row,
+            "seat_col": t.seat_col,
+            "seat_type": t.seat_type,
+            "price": t.price,
             "is_paid": t.is_paid,
             "session_id": t.session_id,
             "session_datetime": session.datetime.isoformat() if session else None,
-            "hall": session.hall if session else None,
-            "price": session.price if session else None,
+            "hall_name": hall.name if hall else None,
             "movie_title": movie.title if movie else None,
         })
     return result

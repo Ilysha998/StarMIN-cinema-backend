@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
-from routers import movies_router, sessions_router, tickets_router, users_router
+from routers import movies_router, sessions_router, tickets_router, users_router, halls_router
 from session_manager import scheduler
 from config import settings
 from rate_limiter import RateLimitMiddleware
@@ -42,6 +42,7 @@ app.include_router(movies_router)
 app.include_router(sessions_router)
 app.include_router(tickets_router)
 app.include_router(users_router)
+app.include_router(halls_router)
 
 
 @app.get("/", tags=["Info"])

@@ -2,8 +2,31 @@ import threading
 import random
 from datetime import datetime, timedelta
 from database import SessionLocal, init_db
-from models import Movie, Session as SessionModel
-from config import settings, HALL_CONFIG, HALLS
+from models import Movie, Session as SessionModel, Hall
+from config import settings, DEFAULT_HALL_LAYOUTS
+
+
+def seed_halls():
+    db = SessionLocal()
+    try:
+        existing = db.query(Hall).first()
+        if existing:
+            return
+
+        for name, cfg in DEFAULT_HALL_LAYOUTS.items():
+            db.add(Hall(
+                name=name,
+                layout=cfg["layout"],
+                break_minutes=cfg["break_minutes"],
+                base_price=cfg["base_price"],
+            ))
+        db.commit()
+        print(f"SM: Залы созданы ({len(DEFAULT_HALL_LAYOUTS)} залов)")
+    except Exception as e:
+        db.rollback()
+        print(f"SM: Ошибка при создании залов: {e}")
+    finally:
+        db.close()
 
 
 def seed_movie_pool():
@@ -48,12 +71,15 @@ def generate_sessions_for_date(target_date: datetime):
         if not movies:
             return 0
 
+        halls = db.query(Hall).all()
+        if not halls:
+            return 0
+
         created = 0
 
-        for hall in HALLS:
-            cfg = HALL_CONFIG[hall]
-            break_min = cfg["break_minutes"]
-            base_price = cfg["base_price"]
+        for hall in halls:
+            base_price = hall.base_price
+            break_min = hall.break_minutes
             current_time = target_date.replace(hour=settings.FIRST_SESSION_HOUR, minute=0, second=0, microsecond=0)
             end_limit = target_date.replace(hour=settings.LAST_SESSION_HOUR, minute=59, second=59, microsecond=0)
             used_movies = []
@@ -87,7 +113,7 @@ def generate_sessions_for_date(target_date: datetime):
                 session = SessionModel(
                     movie_id=movie.id,
                     datetime=current_time,
-                    hall=hall,
+                    hall_id=hall.id,
                     price=float(price),
                 )
                 db.add(session)
@@ -131,6 +157,7 @@ class SessionScheduler:
 
     def _run_daily(self):
         init_db()
+        seed_halls()
         seed_movie_pool()
         generate_sessions_for_date(datetime.now())
         generate_sessions_for_date(datetime.now() + timedelta(days=1))
@@ -159,7 +186,7 @@ class SessionScheduler:
         self._run_daily()
         self._thread = threading.Thread(target=self._scheduler_loop, daemon=True)
         self._thread.start()
-        print("SM: Полуночный планирователь активен")
+        print("SM: Полуночный планировщик активен")
 
     def stop(self):
         print("SM: Остановка...")

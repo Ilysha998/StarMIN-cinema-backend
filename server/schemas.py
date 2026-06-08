@@ -1,15 +1,51 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from datetime import datetime as dt_datetime
 from typing import Optional, List
 from enum import Enum
 
 
-class HallEnum(str, Enum):
-    hall_1 = "1"
-    hall_2 = "2"
-    hall_vip = "vip"
+class SeatType(str, Enum):
+    standard = "standard"
+    sofa = "sofa"
+    empty = "empty"
+
+
+class SeatPosition(BaseModel):
+    row: int = Field(..., ge=0, description="Ряд (0-индексированный)")
+    col: int = Field(..., ge=0, description="Место в ряду (0-индексированный)")
+
+
+# Схемы залов
+
+class HallBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="Название зала")
+    layout: List[List[SeatType]] = Field(..., description="2D схема мест (standard/sofa/empty)")
+    break_minutes: int = Field(15, gt=0, description="Перерыв между сеансами (мин)")
+    base_price: float = Field(250.0, gt=0, description="Базовая цена билета")
+
+
+class HallCreate(HallBase):
+    pass
+
+
+class HallUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=50)
+    layout: Optional[List[List[SeatType]]] = None
+    break_minutes: Optional[int] = Field(None, gt=0)
+    base_price: Optional[float] = Field(None, gt=0)
+
+
+class HallResponse(BaseModel):
+    id: int
+    name: str
+    layout: List[List[str]]
+    break_minutes: int
+    base_price: float
+    seat_count: int
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Схемы кинца
@@ -40,13 +76,13 @@ class MovieResponse(MovieBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Схемы сеансов показа кина
+# Схемы сеансов
 
 class SessionBase(BaseModel):
     movie_id: int = Field(..., gt=0, description="ID фильма")
+    hall_id: int = Field(..., gt=0, description="ID зала")
     datetime: dt_datetime = Field(..., description="Дата и время сеанса")
-    hall: HallEnum = Field(..., description="Зал: 1, 2, vip")
-    price: float = Field(..., gt=0, description="Цена билета")
+    price: float = Field(..., gt=0, description="Базовая цена билета")
 
 
 class SessionCreate(SessionBase):
@@ -55,8 +91,8 @@ class SessionCreate(SessionBase):
 
 class SessionUpdate(BaseModel):
     movie_id: Optional[int] = Field(None, gt=0)
+    hall_id: Optional[int] = Field(None, gt=0)
     datetime: Optional[dt_datetime] = None
-    hall: Optional[HallEnum] = None
     price: Optional[float] = Field(None, gt=0)
 
 
@@ -70,22 +106,55 @@ class SessionResponse(SessionBase):
 
 class TicketBase(BaseModel):
     session_id: int = Field(..., gt=0, description="ID сеанса")
-    seat_number: int = Field(..., gt=0, description="Номер места")
+    seat_row: int = Field(..., ge=0, description="Ряд")
+    seat_col: int = Field(..., ge=0, description="Место в ряду")
+    seat_type: str = Field("standard", description="Тип места")
+    price: float = Field(..., gt=0, description="Цена билета")
     is_paid: bool = Field(False, description="Оплачен ли билет")
-    user_id: int = Field(..., gt=0, description="ID пользователя")
+    user_id: Optional[int] = Field(None, description="ID пользователя")
+
+
+class MultiTicketCreate(BaseModel):
+    session_id: int = Field(..., gt=0, description="ID сеанса")
+    seats: List[SeatPosition] = Field(..., min_length=1, description="Список мест для покупки")
+    phone: Optional[str] = Field(None, max_length=20, description="Телефон для связи")
+    email: Optional[str] = Field(None, max_length=255, description="Email для связи")
+
+    @model_validator(mode="after")
+    def _no_duplicate_seats(self):
+        seen = set()
+        for s in self.seats:
+            key = (s.row, s.col)
+            if key in seen:
+                raise ValueError(f"Дублирующееся место: ряд {s.row}, место {s.col}")
+            seen.add(key)
+        return self
 
 
 class TicketCreate(BaseModel):
     session_id: int = Field(..., gt=0)
-    seat_number: int = Field(..., gt=0)
+    seat_row: int = Field(..., ge=0)
+    seat_col: int = Field(..., ge=0)
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
 
 
 class TicketUpdate(BaseModel):
     is_paid: Optional[bool] = None
 
 
-class TicketResponse(TicketBase):
+class TicketResponse(BaseModel):
     id: int
+    session_id: int
+    user_id: Optional[int] = None
+    seat_row: int
+    seat_col: int
+    seat_type: str
+    price: float
+    is_paid: bool
+    qr_token: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -93,7 +162,10 @@ class TicketResponse(TicketBase):
 class TicketBrief(BaseModel):
     id: int
     session_id: int
-    seat_number: int
+    seat_row: int
+    seat_col: int
+    seat_type: str
+    price: float
     is_paid: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -103,6 +175,23 @@ class SessionWithTickets(SessionResponse):
     tickets: List[TicketBrief] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Схема карты мест
+
+class SeatMapCell(BaseModel):
+    type: str
+    status: str
+
+
+class SeatMapResponse(BaseModel):
+    session_id: int
+    hall_id: int
+    hall_name: str
+    seat_map: List[List[SeatMapCell]]
+    available_count: int
+    booked_count: int
+    total_seats: int
 
 
 # Схемы юзеров

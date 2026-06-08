@@ -4,7 +4,7 @@ from typing import Optional
 
 class Settings(BaseSettings):
     APP_NAME: str = "StarMIN Cinema Backend"
-    APP_VERSION: str = "1.2.0"
+    APP_VERSION: str = "2.0.0"
     APP_DESCRIPTION: str = "API для системы кинотеатра"
 
     HOST: str = "0.0.0.0"
@@ -29,17 +29,13 @@ class Settings(BaseSettings):
     DEFAULT_PAGE_SIZE: int = 10
     MAX_PAGE_SIZE: int = 100
 
-    HALL_1_SEATS: int = 100
-    HALL_1_BASE_PRICE: float = 250
-    HALL_1_BREAK_MINUTES: int = 15
+    MAX_SEATS_PER_PURCHASE: int = 6
+    MAX_SEATS_PER_USER_PER_SESSION: int = 8
 
-    HALL_2_SEATS: int = 80
-    HALL_2_BASE_PRICE: float = 300
-    HALL_2_BREAK_MINUTES: int = 15
-
-    HALL_VIP_SEATS: int = 30
-    HALL_VIP_BASE_PRICE: float = 500
-    HALL_VIP_BREAK_MINUTES: int = 20
+    SEAT_TYPE_MULTIPLIERS: dict[str, float] = {
+        "standard": 1.0,
+        "sofa": 1.5,
+    }
 
     FIRST_SESSION_HOUR: int = 10
     LAST_SESSION_HOUR: int = 23
@@ -63,23 +59,35 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-
-HALL_CONFIG = {
+DEFAULT_HALL_LAYOUTS = {
     "1": {
-        "seats": settings.HALL_1_SEATS,
-        "base_price": settings.HALL_1_BASE_PRICE,
-        "break_minutes": settings.HALL_1_BREAK_MINUTES,
+        "layout": [["standard"] * 10 for _ in range(10)],
+        "base_price": settings.HALL_1_BASE_PRICE if hasattr(settings, "HALL_1_BASE_PRICE") else 250.0,
+        "break_minutes": 15,
     },
     "2": {
-        "seats": settings.HALL_2_SEATS,
-        "base_price": settings.HALL_2_BASE_PRICE,
-        "break_minutes": settings.HALL_2_BREAK_MINUTES,
+        "layout": [
+            ["standard"] * 12,
+            ["standard"] * 12,
+            ["standard"] * 12,
+            ["standard"] * 12,
+            ["standard"] * 10 + ["empty"] * 2,
+            ["standard"] * 10 + ["empty"] * 2,
+            ["standard"] * 8 + ["empty"] * 4,
+            ["standard"] * 8 + ["empty"] * 4,
+        ],
+        "base_price": 300.0,
+        "break_minutes": 15,
     },
     "vip": {
-        "seats": settings.HALL_VIP_SEATS,
-        "base_price": settings.HALL_VIP_BASE_PRICE,
-        "break_minutes": settings.HALL_VIP_BREAK_MINUTES,
+        "layout": [
+            ["sofa", "sofa", "empty", "sofa", "sofa", "empty", "sofa", "sofa"],
+            ["sofa", "sofa", "empty", "sofa", "sofa", "empty", "sofa", "sofa"],
+            ["standard", "standard", "empty", "standard", "standard", "empty", "standard", "standard"],
+            ["standard", "standard", "standard", "standard", "standard", "standard", "empty", "empty"],
+            ["standard", "standard", "standard", "standard", "standard", "standard", "empty", "empty"],
+        ],
+        "base_price": 500.0,
+        "break_minutes": 20,
     },
 }
-
-HALLS = list(HALL_CONFIG.keys())

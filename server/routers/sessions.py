@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from database import get_db
-from models import Session as SessionModel, Movie, User
-from schemas import SessionCreate, SessionResponse, SessionUpdate, SessionWithTickets, HallEnum
-from auth import get_current_user, get_current_admin_user
-from config import HALL_CONFIG
+from models import Session as SessionModel, Movie, Hall, User
+from schemas import SessionCreate, SessionResponse, SessionUpdate, SessionWithTickets
+from auth import get_current_admin_user
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
 
@@ -41,15 +40,22 @@ def get_sessions_by_movie(
     return sessions
 
 
-@router.get("/hall/{hall}", response_model=list[SessionResponse])
+@router.get("/hall/{hall_id}", response_model=list[SessionResponse])
 def get_sessions_by_hall(
-    hall: HallEnum,
+    hall_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
+    hall = db.query(Hall).filter(Hall.id == hall_id).first()
+    if not hall:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Зал с ID {hall_id} не найден"
+        )
+
     sessions = db.query(SessionModel).filter(
-        SessionModel.hall == hall.value
+        SessionModel.hall_id == hall_id
     ).order_by(SessionModel.datetime).offset(skip).limit(limit).all()
     return sessions
 
@@ -78,6 +84,13 @@ def create_session(
             detail=f"Фильм с ID {session.movie_id} не найден"
         )
 
+    hall = db.query(Hall).filter(Hall.id == session.hall_id).first()
+    if not hall:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Зал с ID {session.hall_id} не найден"
+        )
+
     if session.datetime < datetime.now():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -85,21 +98,20 @@ def create_session(
         )
 
     conflict = db.query(SessionModel).filter(
-        SessionModel.hall == session.hall.value,
+        SessionModel.hall_id == session.hall_id,
         SessionModel.datetime < session.datetime,
     ).all()
-    break_min = HALL_CONFIG.get(session.hall.value, {}).get("break_minutes", 15)
     for existing in conflict:
-        if existing.datetime + timedelta(minutes=movie.duration + break_min) > session.datetime:
+        if existing.datetime + timedelta(minutes=movie.duration + hall.break_minutes) > session.datetime:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Зал {session.hall.value} занят в это время"
+                detail=f"Зал '{hall.name}' занят в это время"
             )
 
     db_session = SessionModel(
         movie_id=session.movie_id,
+        hall_id=session.hall_id,
         datetime=session.datetime,
-        hall=session.hall.value,
         price=session.price,
     )
     db.add(db_session)
@@ -132,14 +144,19 @@ def update_session(
                 detail=f"Фильм с ID {update_data['movie_id']} не найден"
             )
 
+    if "hall_id" in update_data:
+        hall = db.query(Hall).filter(Hall.id == update_data["hall_id"]).first()
+        if not hall:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Зал с ID {update_data['hall_id']} не найден"
+            )
+
     if "datetime" in update_data and update_data["datetime"] < datetime.now():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Дата и время сеанса должны быть в будущем"
         )
-
-    if "hall" in update_data:
-        update_data["hall"] = update_data["hall"].value
 
     for field, value in update_data.items():
         setattr(db_session, field, value)
