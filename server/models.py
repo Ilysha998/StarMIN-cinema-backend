@@ -40,15 +40,18 @@ class Ticket(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     seat_number = Column(Integer, nullable=False)
     is_paid = Column(Boolean, default=False, nullable=False)
+    phone = Column(String(20), nullable=True, index=True)
+    email = Column(String(255), nullable=True, index=True)
+    qr_token = Column(String(64), unique=True, nullable=False, index=True)
 
     session = relationship("Session", back_populates="tickets")
     user = relationship("User", back_populates="tickets")
 
     def __repr__(self):
-        return f"<Ticket(id={self.id}, session_id={self.session_id}, user_id={self.user_id}, seat={self.seat_number})>"
+        return f"<Ticket(id={self.id}, session_id={self.session_id}, seat={self.seat_number})>"
 
 
 class User(Base):
@@ -58,8 +61,10 @@ class User(Base):
     login = Column(String(100), unique=True, nullable=False, index=True)
     password = Column(String(255), nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
+    phone = Column(String(20), nullable=True, index=True)
+    email = Column(String(255), nullable=True, index=True)
 
-    tickets = relationship("Ticket", back_populates="user", cascade="all, delete-orphan")
+    tickets = relationship("Ticket", back_populates="user")
 
     def __repr__(self):
         return f"<User(id={self.id}, login={self.login}, is_admin={self.is_admin})>"

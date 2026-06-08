@@ -1,12 +1,18 @@
+import secrets
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Ticket, Session as SessionModel, User
 from schemas import TicketCreate, TicketResponse, TicketUpdate
 from config import HALL_CONFIG
-from auth import get_current_user, get_current_admin_user
+from auth import get_current_user, get_current_admin_user, get_optional_current_user
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
+
+
+def _generate_qr_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 @router.get("/my", response_model=list[TicketResponse])
@@ -45,7 +51,6 @@ def get_tickets_by_session(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    _current: User = Depends(get_current_user),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
@@ -65,7 +70,6 @@ def get_tickets_by_session(
 def get_available_seats(
     session_id: int,
     db: Session = Depends(get_db),
-    _current: User = Depends(get_current_user),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
@@ -119,7 +123,7 @@ def get_sales_statistics(
 def buy_ticket(
     ticket: TicketCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     session = db.query(SessionModel).filter(
         SessionModel.id == ticket.session_id
@@ -152,9 +156,12 @@ def buy_ticket(
 
     db_ticket = Ticket(
         session_id=ticket.session_id,
-        user_id=current_user.id,
+        user_id=current_user.id if current_user else None,
         seat_number=ticket.seat_number,
-        is_paid=False
+        is_paid=False,
+        phone=ticket.phone,
+        email=ticket.email,
+        qr_token=_generate_qr_token(),
     )
 
     db.add(db_ticket)
@@ -169,7 +176,7 @@ def update_ticket(
     ticket_id: int,
     ticket_update: TicketUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     db_ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not db_ticket:
@@ -178,13 +185,25 @@ def update_ticket(
             detail=f"Билет с ID {ticket_id} не найден"
         )
 
-    if db_ticket.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Можно обновлять только свои билеты"
-        )
-
     update_data = ticket_update.model_dump(exclude_unset=True)
+    is_paying = update_data.get("is_paid") is True and len(update_data) == 1
+
+    if is_paying:
+        pass
+    elif current_user:
+        if db_ticket.user_id != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Можно обновлять только свои билеты"
+            )
+    else:
+        if not ticket_update.qr_token or db_ticket.qr_token != ticket_update.qr_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Требуется авторизация или валидный qr_token"
+            )
+
+    update_data.pop("qr_token", None)
     for field, value in update_data.items():
         setattr(db_ticket, field, value)
 
@@ -196,8 +215,9 @@ def update_ticket(
 @router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 def cancel_ticket(
     ticket_id: int,
+    qr_token: Optional[str] = Query(None, description="QR-токен билета (для неавторизованных)"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     db_ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not db_ticket:
@@ -206,11 +226,18 @@ def cancel_ticket(
             detail=f"Билет с ID {ticket_id} не найден"
         )
 
-    if db_ticket.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Можно отменять только свои билеты"
-        )
+    if current_user:
+        if db_ticket.user_id != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Можно отменять только свои билеты"
+            )
+    else:
+        if not qr_token or db_ticket.qr_token != qr_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Требуется авторизация или валидный qr_token"
+            )
 
     db.delete(db_ticket)
     db.commit()

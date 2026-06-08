@@ -13,10 +13,10 @@ def seed_movie_pool():
         if existing:
             return
 
-        for movie_data in MOVIE_POOL:
+        for movie_data in settings.MOVIE_POOL:
             db.add(Movie(**movie_data))
         db.commit()
-        print(f"SM: Пул фильмов заполнен ({len(MOVIE_POOL)} фильмов)")
+        print(f"SM: Пул фильмов заполнен ({len(settings.MOVIE_POOL)} фильмов)")
     except Exception as e:
         db.rollback()
         print(f"SM: Ошибка при заполнении пула: {e}")
