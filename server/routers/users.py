@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User
+from models import User, Ticket
 from schemas import UserCreate, UserResponse, UserUpdate, TokenResponse
 from auth import (
     hash_password, verify_password, create_access_token,
@@ -10,6 +10,26 @@ from auth import (
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+def _link_tickets_to_user(db: Session, user: User):
+    orphan_tickets = db.query(Ticket).filter(Ticket.user_id.is_(None))
+    linked = 0
+    if user.email:
+        matches = orphan_tickets.filter(Ticket.email == user.email).all()
+        for t in matches:
+            t.user_id = user.id
+            linked += 1
+    if user.phone:
+        matches = db.query(Ticket).filter(
+            Ticket.user_id.is_(None),
+            Ticket.phone == user.phone,
+        ).all()
+        for t in matches:
+            t.user_id = user.id
+            linked += 1
+    if linked:
+        db.commit()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -21,14 +41,35 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
             detail="Пользователь с таким логином уже существует"
         )
 
+    if user.email:
+        existing_email = db.query(User).filter(User.email == user.email).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Пользователь с таким email уже существует"
+            )
+
+    if user.phone:
+        existing_phone = db.query(User).filter(User.phone == user.phone).first()
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Пользователь с таким телефоном уже существует"
+            )
+
     db_user = User(
         login=user.login,
         password=hash_password(user.password),
-        is_admin=user.is_admin
+        is_admin=user.is_admin,
+        phone=user.phone,
+        email=user.email,
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+
+    _link_tickets_to_user(db, db_user)
+
     return db_user
 
 
@@ -44,6 +85,9 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
+
+    _link_tickets_to_user(db, user)
+
     return TokenResponse(
         access_token=access_token,
         user_id=user.id,
@@ -73,6 +117,7 @@ def get_my_tickets(current_user: User = Depends(get_current_user), db: Session =
             "seat_type": t.seat_type,
             "price": t.price,
             "is_paid": t.is_paid,
+            "qr_token": t.qr_token,
             "session_id": t.session_id,
             "session_datetime": session.datetime.isoformat() if session else None,
             "hall_name": hall.name if hall else None,
@@ -143,6 +188,10 @@ def update_user(
 
     db.commit()
     db.refresh(db_user)
+
+    if "phone" in update_data or "email" in update_data:
+        _link_tickets_to_user(db, db_user)
+
     return db_user
 
 

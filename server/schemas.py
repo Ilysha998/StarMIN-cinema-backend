@@ -141,6 +141,9 @@ class TicketCreate(BaseModel):
 
 class TicketUpdate(BaseModel):
     is_paid: Optional[bool] = None
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
+    qr_token: Optional[str] = Field(None, description="QR-токен для анонимной оплаты")
 
 
 class TicketResponse(BaseModel):
@@ -167,6 +170,7 @@ class TicketBrief(BaseModel):
     seat_type: str
     price: float
     is_paid: bool
+    qr_token: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -199,6 +203,8 @@ class SeatMapResponse(BaseModel):
 class UserBase(BaseModel):
     login: str = Field(..., min_length=3, max_length=100, description="Логин пользователя")
     is_admin: bool = Field(False, description="Администратор ли")
+    phone: Optional[str] = Field(None, max_length=20, description="Телефон")
+    email: Optional[str] = Field(None, max_length=255, description="Email")
 
 
 class UserCreate(UserBase):
@@ -208,6 +214,8 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=6, max_length=255)
     is_admin: Optional[bool] = None
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=255)
 
 
 class UserResponse(UserBase):
