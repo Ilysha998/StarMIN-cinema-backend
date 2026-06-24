@@ -126,6 +126,33 @@ def get_my_tickets(current_user: User = Depends(get_current_user), db: Session =
     return result
 
 
+@router.get("/me/tickets/{ticket_id}")
+def get_my_ticket_by_id(ticket_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from models import Ticket, Session as SessionModel, Movie, Hall
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id, Ticket.user_id == current_user.id).first()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Билет с ID {ticket_id} не найден"
+        )
+    session = db.query(SessionModel).filter(SessionModel.id == ticket.session_id).first()
+    movie = db.query(Movie).filter(Movie.id == session.movie_id).first() if session else None
+    hall = db.query(Hall).filter(Hall.id == session.hall_id).first() if session else None
+    return {
+        "id": ticket.id,
+        "seat_row": ticket.seat_row,
+        "seat_col": ticket.seat_col,
+        "seat_type": ticket.seat_type,
+        "price": ticket.price,
+        "is_paid": ticket.is_paid,
+        "qr_token": ticket.qr_token,
+        "session_id": ticket.session_id,
+        "session_datetime": session.datetime.isoformat() if session else None,
+        "hall_name": hall.name if hall else None,
+        "movie_title": movie.title if movie else None,
+    }
+
+
 @router.get("", response_model=list[UserResponse])
 def get_all_users(
     skip: int = 0,

@@ -153,6 +153,35 @@ def get_my_tickets(
     return tickets
 
 
+@router.get("/{ticket_id}", response_model=TicketResponse)
+def get_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Билет с ID {ticket_id} не найден"
+        )
+
+    if current_user:
+        if ticket.user_id != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Можно просматривать только свои билеты"
+            )
+    else:
+        if not ticket.qr_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Требуется авторизация для просмотра билета без QR-токена"
+            )
+
+    return ticket
+
+
 @router.get("", response_model=list[TicketResponse])
 def get_all_tickets(
     session_id: int = Query(None, description="Фильтр по ID сеанса"),
