@@ -32,6 +32,7 @@ class Movie(Base):
     duration = Column(Integer, nullable=False)
     age_restriction = Column(Integer, nullable=False, default=0)
     poster_url = Column(String(500), nullable=True)
+    banner_url = Column(String(500), nullable=True)
 
     sessions = relationship("Session", back_populates="movie", cascade="all, delete-orphan")
 

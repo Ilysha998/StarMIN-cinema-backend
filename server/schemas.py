@@ -56,6 +56,7 @@ class MovieBase(BaseModel):
     duration: int = Field(..., gt=0, description="Длительность в минутах")
     age_restriction: int = Field(..., ge=0, le=18, description="Возрастное ограничение (0, 6, 12, 16, 18)")
     poster_url: Optional[str] = Field(None, max_length=500, description="URL постера")
+    banner_url: Optional[str] = Field(None, max_length=500, description="URL баннера")
 
 
 class MovieCreate(MovieBase):
@@ -68,6 +69,7 @@ class MovieUpdate(BaseModel):
     duration: Optional[int] = Field(None, gt=0)
     age_restriction: Optional[int] = Field(None, ge=0, le=18)
     poster_url: Optional[str] = Field(None, max_length=500)
+    banner_url: Optional[str] = Field(None, max_length=500)
 
 
 class MovieResponse(MovieBase):
