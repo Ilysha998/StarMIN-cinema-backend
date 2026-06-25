@@ -137,12 +137,14 @@ class TicketCreate(BaseModel):
     session_id: int = Field(..., gt=0)
     seat_row: int = Field(..., ge=0)
     seat_col: int = Field(..., ge=0)
+    seat_type: str = Field("standard", description="Тип места")
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[str] = Field(None, max_length=255)
 
 
 class TicketUpdate(BaseModel):
     is_paid: Optional[bool] = None
+    refunded: Optional[bool] = None
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[str] = Field(None, max_length=255)
     qr_token: Optional[str] = Field(None, description="QR-токен для анонимной оплаты")
@@ -157,6 +159,7 @@ class TicketResponse(BaseModel):
     seat_type: str
     price: float
     is_paid: bool
+    refunded: bool
     qr_token: str
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -172,9 +175,14 @@ class TicketBrief(BaseModel):
     seat_type: str
     price: float
     is_paid: bool
+    refunded: bool
     qr_token: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RefundRequest(BaseModel):
+    qr_token: Optional[str] = Field(None, description="QR-токен для анонимной оплаты")
 
 
 class SessionWithTickets(SessionResponse):

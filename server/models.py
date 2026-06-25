@@ -71,6 +71,7 @@ class Ticket(Base):
     seat_type = Column(String(20), nullable=False, default="standard")
     price = Column(Float, nullable=False)
     is_paid = Column(Boolean, default=False, nullable=False)
+    refunded = Column(Boolean, default=False, nullable=False, index=True)
     phone = Column(String(20), nullable=True, index=True)
     email = Column(String(255), nullable=True, index=True)
     qr_token = Column(String(64), unique=True, nullable=False, index=True)

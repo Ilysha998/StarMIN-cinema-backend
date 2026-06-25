@@ -8,6 +8,7 @@ from models import Ticket, Session as SessionModel, Hall, User
 from schemas import (
     TicketCreate, TicketResponse, TicketUpdate,
     MultiTicketCreate, SeatPosition, SeatMapResponse, SeatMapCell,
+    RefundRequest,
 )
 from auth import get_current_user, get_current_admin_user, get_optional_current_user
 from config import settings
@@ -461,3 +462,57 @@ def cancel_ticket(
 
     db.delete(db_ticket)
     db.commit()
+
+
+@router.post("/{ticket_id}/refund", response_model=TicketResponse)
+def refund_ticket(
+    ticket_id: int,
+    refund_request: RefundRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    db_ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not db_ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Билет с ID {ticket_id} не найден"
+        )
+
+    if db_ticket.refunded:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Билет уже возвращен"
+        )
+
+    session = db.query(SessionModel).filter(SessionModel.id == db_ticket.session_id).first()
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Сеанс с ID {db_ticket.session_id} не найден"
+        )
+
+    from datetime import datetime
+    if session.datetime <= datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя вернуть билет после начала сеанса"
+        )
+
+    if current_user:
+        if db_ticket.user_id != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Можно возвращать только свои билеты"
+            )
+    else:
+        if not refund_request.qr_token or db_ticket.qr_token != refund_request.qr_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Требуется авторизация или валидный qr_token"
+            )
+
+    db_ticket.refunded = True
+    db.commit()
+    db.refresh(db_ticket)
+
+    return db_ticket

@@ -133,21 +133,7 @@ def generate_sessions_for_date(target_date: datetime):
 
 
 def cleanup_past_sessions():
-    db = SessionLocal()
-    try:
-        now = datetime.now()
-        cutoff = now - timedelta(hours=settings.CLEANUP_HOURS_AGO)
-        old = db.query(SessionModel).filter(SessionModel.datetime < cutoff).all()
-        for s in old:
-            db.delete(s)
-        db.commit()
-        if old:
-            print(f"SM: Удалено {len(old)} прошедших сеансов")
-    except Exception as e:
-        db.rollback()
-        print(f"SM: Ошибка очистки: {e}")
-    finally:
-        db.close()
+    pass  # Очистка сеансов отключена для сохранения билетов
 
 
 class SessionScheduler:
